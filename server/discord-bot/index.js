@@ -111,11 +111,24 @@ if (!process.env.DISCORD_TOKEN) {
 logger.info(`Discord token found (length: ${process.env.DISCORD_TOKEN.length} characters)`);
 logger.info('Attempting to login to Discord...');
 
+// Set a timeout to detect if login hangs
+const loginTimeout = setTimeout(() => {
+    logger.error('❌ Login timeout! Discord is not responding after 30 seconds.');
+    logger.error('This usually means:');
+    logger.error('  1. Network connectivity issues');
+    logger.error('  2. Discord API is down');
+    logger.error('  3. Invalid token format');
+    logger.error('  4. Bot intents not properly configured');
+    process.exit(1);
+}, 30000); // 30 second timeout
+
 client.login(process.env.DISCORD_TOKEN)
     .then(() => {
+        clearTimeout(loginTimeout);
         logger.success('Login promise resolved successfully!');
     })
     .catch(error => {
+        clearTimeout(loginTimeout);
         logger.error('❌ Failed to login to Discord!');
         logger.error(`Error: ${error.message}`);
         logger.error(`Error code: ${error.code || 'N/A'}`);
