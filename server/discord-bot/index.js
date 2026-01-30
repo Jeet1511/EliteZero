@@ -107,10 +107,21 @@ if (!process.env.DISCORD_TOKEN) {
     process.exit(1);
 }
 
-client.login(process.env.DISCORD_TOKEN).catch(error => {
-    logger.error(`Failed to login: ${error.message}`);
-    process.exit(1);
-});
+// Debug: Show token length (not the actual token for security)
+logger.info(`Discord token found (length: ${process.env.DISCORD_TOKEN.length} characters)`);
+logger.info('Attempting to login to Discord...');
+
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => {
+        logger.success('Login promise resolved successfully!');
+    })
+    .catch(error => {
+        logger.error('❌ Failed to login to Discord!');
+        logger.error(`Error: ${error.message}`);
+        logger.error(`Error code: ${error.code || 'N/A'}`);
+        logger.error('Please check your DISCORD_TOKEN in Render environment variables');
+        process.exit(1);
+    });
 
 // Create HTTP server for Render.com health checks
 const PORT = process.env.PORT || 3000;
