@@ -2,7 +2,7 @@
     "name": "elitezero",
     "version": "1.0.0",
     "description": "EliteZero Discord Bot",
-    "main": "server/discord-bot/index.js",
+    "main": "start.js",
     "type": "module",
     "scripts": {
         "start": "cd server/discord-bot && node index.js",
