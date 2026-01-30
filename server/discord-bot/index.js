@@ -1,0 +1,100 @@
+import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
+import { config as dotenvConfig } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { readdirSync } from 'fs';
+import logger from './utils/logger.js';
+
+// Load environment variables
+dotenvConfig();
+
+// Get current directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Create Discord client
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+});
+
+// Create commands collection
+client.commands = new Collection();
+
+// Load commands
+const commandsPath = join(__dirname, 'commands');
+const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+logger.info(`Loading ${commandFiles.length} commands...`);
+
+for (const file of commandFiles) {
+    const filePath = join(commandsPath, file);
+    const command = await import(`file://${filePath}`);
+
+    if ('data' in command.default && 'execute' in command.default) {
+        client.commands.set(command.default.data.name, command.default);
+        logger.success(`Loaded command: ${command.default.data.name}`);
+    } else {
+        logger.warn(`Command at ${file} is missing required "data" or "execute" property.`);
+    }
+}
+
+// Load events
+const eventsPath = join(__dirname, 'events');
+const eventFiles = readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+
+logger.info(`Loading ${eventFiles.length} events...`);
+
+for (const file of eventFiles) {
+    const filePath = join(eventsPath, file);
+    const event = await import(`file://${filePath}`);
+
+    if (event.default.once) {
+        client.once(event.default.name, (...args) => event.default.execute(...args));
+    } else {
+        client.on(event.default.name, (...args) => event.default.execute(...args));
+    }
+
+    logger.success(`Loaded event: ${event.default.name}`);
+}
+
+// Error handling
+process.on('unhandledRejection', error => {
+    logger.error(`Unhandled promise rejection: ${error}`);
+});
+
+process.on('uncaughtException', error => {
+    logger.error(`Uncaught exception: ${error}`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    logger.info('Shutting down gracefully...');
+    client.destroy();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    logger.info('Shutting down gracefully...');
+    client.destroy();
+    process.exit(0);
+});
+
+// Login to Discord
+logger.info('Starting EliteZero bot...');
+
+if (!process.env.DISCORD_TOKEN) {
+    logger.error('DISCORD_TOKEN is not set in .env file!');
+    logger.error('Please copy .env.example to .env and add your bot token.');
+    process.exit(1);
+}
+
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+    logger.error(`Failed to login: ${error.message}`);
+    process.exit(1);
+});
