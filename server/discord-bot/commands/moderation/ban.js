@@ -18,6 +18,12 @@ export default {
         const reason = interaction.options.getString('reason') || 'No reason provided';
         const member = interaction.guild.members.cache.get(user.id);
 
+        // Protect server owner
+        if (user.id === interaction.guild.ownerId) {
+            const embed = embedBuilder.error('Error', '❌ Cannot ban the server owner! They have absolute power.');
+            return interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+
         if (member && !member.bannable) {
             const embed = embedBuilder.error('Error', 'I cannot ban this user! They may have higher permissions.');
             return interaction.reply({ embeds: [embed], ephemeral: true });
