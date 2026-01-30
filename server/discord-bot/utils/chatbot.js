@@ -8,9 +8,9 @@ class Chatbot {
         this.patterns = [
             // Greetings
             {
-                patterns: [/\b(hi|hello|hey|greetings|sup|yo)\b/i],
+                patterns: [/\b(hi|hii|hiii|yoo|yoo!|yooo|hello|hey|greetings|sup|yo)\b/i],
                 responses: [
-                    '👋 Hey there! I\'m EliteZero, your futuristic AI companion! How can I help you today?',
+                    '👋 Hey there! I\'m EliteZero, your AI companion! How can I help you today?',
                     '✨ Hello! Ready to explore the future together?',
                     '🚀 Greetings! What brings you to the future today?',
                     '⚡ Hey! EliteZero at your service. What\'s on your mind?',
@@ -18,7 +18,7 @@ class Chatbot {
             },
             // How are you
             {
-                patterns: [/how are you|how\'re you|hows it going|whats up/i],
+                patterns: [/how are you|how\'re you|hows it going|whats up|whats up!/i],
                 responses: [
                     '🤖 I\'m running at optimal performance! Thanks for asking. How about you?',
                     '✨ Feeling electric! My circuits are buzzing with energy. What about you?',
