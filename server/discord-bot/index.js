@@ -3,6 +3,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
+import http from 'http';
 import logger from './utils/logger.js';
 
 // Load environment variables
@@ -97,4 +98,25 @@ if (!process.env.DISCORD_TOKEN) {
 client.login(process.env.DISCORD_TOKEN).catch(error => {
     logger.error(`Failed to login: ${error.message}`);
     process.exit(1);
+});
+
+// Create HTTP server for Render.com health checks
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status: 'ok',
+            bot: client.user ? client.user.tag : 'Starting...',
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        }));
+    } else {
+        res.writeHead(404);
+        res.end('Not Found');
+    }
+});
+
+server.listen(PORT, () => {
+    logger.success(`Health check server running on port ${PORT}`);
 });
