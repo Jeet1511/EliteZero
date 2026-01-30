@@ -27,23 +27,35 @@ const client = new Client({
 // Create commands collection
 client.commands = new Collection();
 
-// Load commands
-const commandsPath = join(__dirname, 'commands');
-const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+// Function to recursively load commands from directories
+async function loadCommands(dir) {
+    const entries = readdirSync(dir, { withFileTypes: true });
 
-logger.info(`Loading ${commandFiles.length} commands...`);
+    for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
 
-for (const file of commandFiles) {
-    const filePath = join(commandsPath, file);
-    const command = await import(`file://${filePath}`);
+        if (entry.isDirectory()) {
+            // Recursively load commands from subdirectories
+            await loadCommands(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith('.js')) {
+            const command = await import(`file://${fullPath}`);
 
-    if ('data' in command.default && 'execute' in command.default) {
-        client.commands.set(command.default.data.name, command.default);
-        logger.success(`Loaded command: ${command.default.data.name}`);
-    } else {
-        logger.warn(`Command at ${file} is missing required "data" or "execute" property.`);
+            if ('data' in command.default && 'execute' in command.default) {
+                client.commands.set(command.default.data.name, command.default);
+                logger.success(`Loaded command: ${command.default.data.name}`);
+            } else {
+                logger.warn(`Command at ${entry.name} is missing required "data" or "execute" property.`);
+            }
+        }
     }
 }
+
+// Load commands
+const commandsPath = join(__dirname, 'commands');
+
+logger.info(`Loading commands...`);
+
+await loadCommands(commandsPath);
 
 // Load events
 const eventsPath = join(__dirname, 'events');
