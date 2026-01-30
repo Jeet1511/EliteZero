@@ -1,0 +1,15 @@
+{
+    "name": "elitezero",
+    "version": "1.0.0",
+    "description": "EliteZero Discord Bot",
+    "main": "server/discord-bot/index.js",
+    "type": "module",
+    "scripts": {
+        "start": "cd server/discord-bot && node index.js",
+        "install-bot": "cd server/discord-bot && npm install"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "private": true
+}
