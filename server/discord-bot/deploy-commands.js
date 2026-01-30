@@ -14,23 +14,35 @@ const __dirname = dirname(__filename);
 
 const commands = [];
 
+// Function to recursively load commands from directories
+async function loadCommands(dir) {
+    const entries = readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+            // Recursively load commands from subdirectories
+            await loadCommands(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith('.js')) {
+            const command = await import(`file://${fullPath}`);
+
+            if ('data' in command.default && 'execute' in command.default) {
+                commands.push(command.default.data.toJSON());
+                console.log(chalk.green(`✓ Loaded: ${command.default.data.name}`));
+            } else {
+                console.log(chalk.yellow(`⚠ Skipped: ${entry.name} (missing data or execute)`));
+            }
+        }
+    }
+}
+
 // Load all command files
 const commandsPath = join(__dirname, 'commands');
-const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 console.log(chalk.cyan('📦 Loading commands...'));
 
-for (const file of commandFiles) {
-    const filePath = join(commandsPath, file);
-    const command = await import(`file://${filePath}`);
-
-    if ('data' in command.default && 'execute' in command.default) {
-        commands.push(command.default.data.toJSON());
-        console.log(chalk.green(`✓ Loaded: ${command.default.data.name}`));
-    } else {
-        console.log(chalk.yellow(`⚠ Skipped: ${file} (missing data or execute)`));
-    }
-}
+await loadCommands(commandsPath);
 
 // Construct and prepare an instance of the REST module
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
