@@ -18,6 +18,7 @@ export default {
                 await command.execute(interaction);
             } catch (error) {
                 logger.error(`Error executing ${interaction.commandName}: ${error.message}`);
+                console.error('Full error details:', error);
 
                 const errorEmbed = embedBuilder.error(
                     'Command Error',

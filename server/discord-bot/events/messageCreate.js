@@ -2,12 +2,16 @@ import chatbot from '../utils/chatbot.js';
 import embedBuilder from '../utils/embedBuilder.js';
 import logger from '../utils/logger.js';
 import openclawManager from '../utils/openclawManager.js';
+import activityTracker from '../utils/activityTracker.js';
 
 export default {
     name: 'messageCreate',
     async execute(message) {
         // Ignore bot messages
         if (message.author.bot) return;
+
+        // Track message activity
+        activityTracker.trackMessage(message.author.id, message.author.username);
 
         // Check if bot is mentioned
         if (message.mentions.has(message.client.user)) {

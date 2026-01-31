@@ -68,6 +68,11 @@ export default {
                         'and stunning visual design.',
                     inline: false,
                 },
+                {
+                    name: '💖 Creator',
+                    value: '**GitHub:** [@jeet1511](https://github.com/jeet1511)',
+                    inline: false,
+                },
             ],
         });
 

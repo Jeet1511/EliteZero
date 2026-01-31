@@ -1,3 +1,11 @@
+/**
+ * EliteZero Discord Bot
+ * A futuristic AI-powered Discord bot
+ * 
+ * Created by: @jeet1511
+ * GitHub: https://github.com/jeet1511
+ */
+
 import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
 import { config as dotenvConfig } from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -5,6 +13,7 @@ import { dirname, join } from 'path';
 import { readdirSync } from 'fs';
 import http from 'http';
 import logger from './utils/logger.js';
+import { startKeepAlive } from './utils/keepAlive.js';
 
 // Load environment variables
 dotenvConfig();

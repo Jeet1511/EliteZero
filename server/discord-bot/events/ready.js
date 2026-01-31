@@ -1,6 +1,7 @@
 import { ActivityType } from 'discord.js';
 import logger from '../utils/logger.js';
 import config from '../config.js';
+import { startKeepAlive } from '../utils/keepAlive.js';
 
 export default {
     name: 'ready',
@@ -18,6 +19,9 @@ export default {
 
         // Rotate status every 30 seconds
         setInterval(() => updateStatus(client), config.statusInterval);
+
+        // Start keep-alive feature to prevent bot sleep
+        startKeepAlive(client);
 
         logger.success('Bot is fully operational! 🚀');
     },

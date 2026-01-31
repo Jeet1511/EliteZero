@@ -1,0 +1,432 @@
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import config from '../config.js';
+
+const games = {
+    tictactoe: '🎮 Tic Tac Toe',
+    connect4: '🔴 Connect Four',
+    hangman: '🎭 Hangman',
+    chess: '♟️ Chess',
+    battleship: '🚢 Battleship',
+    rps: '✊ Rock Paper Scissors',
+    trivia: '🧠 Trivia',
+    wordle: '📝 Wordle',
+    quiz: '❓ Quiz',
+    memory: '🧩 Memory Game'
+};
+
+export default {
+    data: new SlashCommandBuilder()
+        .setName('game')
+        .setDescription('🎮 Play interactive games!')
+        .addStringOption(option =>
+            option
+                .setName('type')
+                .setDescription('Choose a game to play')
+                .setRequired(true)
+                .addChoices(
+                    { name: '🎮 Tic Tac Toe', value: 'tictactoe' },
+                    { name: '🎭 Hangman', value: 'hangman' },
+                    { name: '📝 Wordle', value: 'wordle' },
+                    { name: '🧩 Memory Match', value: 'memory' },
+                    { name: '🎲 Number Guess', value: 'guess' }
+                )
+        ),
+
+    async execute(interaction) {
+        const gameType = interaction.options.getString('type');
+
+        switch (gameType) {
+            case 'tictactoe':
+                await playTicTacToe(interaction);
+                break;
+            case 'hangman':
+                await playHangman(interaction);
+                break;
+            case 'wordle':
+                await playWordle(interaction);
+                break;
+            case 'memory':
+                await playMemory(interaction);
+                break;
+            case 'guess':
+                await playNumberGuess(interaction);
+                break;
+            default:
+                await interaction.reply({ content: 'Game not available yet!', ephemeral: true });
+        }
+    },
+};
+
+// Tic Tac Toe Game
+async function playTicTacToe(interaction) {
+    const board = ['⬜', '⬜', '⬜', '⬜', '⬜', '⬜', '⬜', '⬜', '⬜'];
+    let currentPlayer = '❌';
+    let gameOver = false;
+
+    const createBoard = () => {
+        const rows = [];
+        for (let i = 0; i < 3; i++) {
+            const row = new ActionRowBuilder();
+            for (let j = 0; j < 3; j++) {
+                const index = i * 3 + j;
+                row.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`ttt_${index}`)
+                        .setLabel(board[index])
+                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(board[index] !== '⬜' || gameOver)
+                );
+            }
+            rows.push(row);
+        }
+        return rows;
+    };
+
+    const checkWinner = () => {
+        const winPatterns = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+            [0, 4, 8], [2, 4, 6] // Diagonals
+        ];
+
+        for (const pattern of winPatterns) {
+            const [a, b, c] = pattern;
+            if (board[a] !== '⬜' && board[a] === board[b] && board[a] === board[c]) {
+                return board[a];
+            }
+        }
+
+        return board.includes('⬜') ? null : 'draw';
+    };
+
+    const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle('🎮 Tic Tac Toe')
+        .setDescription(`Current Player: ${currentPlayer}\n\nClick a button to make your move!`)
+        .setFooter({ text: config.footer.text })
+        .setTimestamp();
+
+    const message = await interaction.reply({
+        embeds: [embed],
+        components: createBoard(),
+        fetchReply: true
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 300000 });
+
+    collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+            await i.reply({ content: 'This is not your game!', ephemeral: true });
+            return;
+        }
+
+        const index = parseInt(i.customId.split('_')[1]);
+        board[index] = currentPlayer;
+
+        const winner = checkWinner();
+        if (winner) {
+            gameOver = true;
+            const resultEmbed = new EmbedBuilder()
+                .setColor(winner === 'draw' ? config.colors.warning : config.colors.success)
+                .setTitle('🎮 Tic Tac Toe - Game Over!')
+                .setDescription(winner === 'draw' ? '🤝 It\'s a draw!' : `🎉 ${winner} wins!`)
+                .setFooter({ text: config.footer.text })
+                .setTimestamp();
+
+            await i.update({ embeds: [resultEmbed], components: createBoard() });
+            collector.stop();
+        } else {
+            currentPlayer = currentPlayer === '❌' ? '⭕' : '❌';
+            const updateEmbed = new EmbedBuilder()
+                .setColor(config.colors.primary)
+                .setTitle('🎮 Tic Tac Toe')
+                .setDescription(`Current Player: ${currentPlayer}\n\nClick a button to make your move!`)
+                .setFooter({ text: config.footer.text })
+                .setTimestamp();
+
+            await i.update({ embeds: [updateEmbed], components: createBoard() });
+        }
+    });
+}
+
+// Hangman Game
+async function playHangman(interaction) {
+    const words = ['JAVASCRIPT', 'DISCORD', 'PROGRAMMING', 'COMPUTER', 'DEVELOPER', 'ALGORITHM', 'DATABASE', 'FUNCTION', 'VARIABLE', 'ARRAY'];
+    const word = words[Math.floor(Math.random() * words.length)];
+    const guessed = new Set();
+    let wrongGuesses = 0;
+    const maxWrong = 6;
+
+    const getDisplay = () => {
+        return word.split('').map(letter => guessed.has(letter) ? letter : '_').join(' ');
+    };
+
+    const getHangman = (wrong) => {
+        const stages = [
+            '```\n  +---+\n  |   |\n      |\n      |\n      |\n      |\n=========```',
+            '```\n  +---+\n  |   |\n  O   |\n      |\n      |\n      |\n=========```',
+            '```\n  +---+\n  |   |\n  O   |\n  |   |\n      |\n      |\n=========```',
+            '```\n  +---+\n  |   |\n  O   |\n /|   |\n      |\n      |\n=========```',
+            '```\n  +---+\n  |   |\n  O   |\n /|\\  |\n      |\n      |\n=========```',
+            '```\n  +---+\n  |   |\n  O   |\n /|\\  |\n /    |\n      |\n=========```',
+            '```\n  +---+\n  |   |\n  O   |\n /|\\  |\n / \\  |\n      |\n=========```'
+        ];
+        return stages[wrong];
+    };
+
+    const createButtons = () => {
+        const rows = [];
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+        for (let i = 0; i < 3; i++) {
+            const row = new ActionRowBuilder();
+            const start = i * 9;
+            const end = Math.min(start + 9, alphabet.length);
+
+            for (let j = start; j < end; j++) {
+                const letter = alphabet[j];
+                row.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`hangman_${letter}`)
+                        .setLabel(letter)
+                        .setStyle(guessed.has(letter) ? ButtonStyle.Secondary : ButtonStyle.Primary)
+                        .setDisabled(guessed.has(letter) || wrongGuesses >= maxWrong || !getDisplay().includes('_'))
+                );
+            }
+            rows.push(row);
+        }
+        return rows;
+    };
+
+    const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle('🎭 Hangman')
+        .setDescription(`${getHangman(wrongGuesses)}\n\n**Word:** ${getDisplay()}\n**Wrong Guesses:** ${wrongGuesses}/${maxWrong}\n**Guessed Letters:** ${Array.from(guessed).join(', ') || 'None'}`)
+        .setFooter({ text: config.footer.text })
+        .setTimestamp();
+
+    const message = await interaction.reply({
+        embeds: [embed],
+        components: createButtons(),
+        fetchReply: true
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 300000 });
+
+    collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+            await i.reply({ content: 'This is not your game!', ephemeral: true });
+            return;
+        }
+
+        const letter = i.customId.split('_')[1];
+        guessed.add(letter);
+
+        if (!word.includes(letter)) {
+            wrongGuesses++;
+        }
+
+        const isWon = !getDisplay().includes('_');
+        const isLost = wrongGuesses >= maxWrong;
+
+        const updateEmbed = new EmbedBuilder()
+            .setColor(isLost ? config.colors.error : isWon ? config.colors.success : config.colors.primary)
+            .setTitle(isWon ? '🎉 You Won!' : isLost ? '💀 Game Over!' : '🎭 Hangman')
+            .setDescription(`${getHangman(wrongGuesses)}\n\n**Word:** ${isWon || isLost ? word : getDisplay()}\n**Wrong Guesses:** ${wrongGuesses}/${maxWrong}\n**Guessed Letters:** ${Array.from(guessed).join(', ')}`)
+            .setFooter({ text: config.footer.text })
+            .setTimestamp();
+
+        await i.update({ embeds: [updateEmbed], components: createButtons() });
+
+        if (isWon || isLost) {
+            collector.stop();
+        }
+    });
+}
+
+// Wordle Game
+async function playWordle(interaction) {
+    const words = ['REACT', 'CODES', 'GAMES', 'MUSIC', 'DANCE', 'PARTY', 'SMART', 'BRAIN', 'HEART', 'LIGHT'];
+    const word = words[Math.floor(Math.random() * words.length)];
+    const guesses = [];
+    const maxGuesses = 6;
+
+    const getColoredGuess = (guess) => {
+        let result = '';
+        for (let i = 0; i < guess.length; i++) {
+            if (guess[i] === word[i]) {
+                result += `🟩`; // Correct position
+            } else if (word.includes(guess[i])) {
+                result += `🟨`; // Wrong position
+            } else {
+                result += `⬜`; // Not in word
+            }
+        }
+        return result;
+    };
+
+    const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle('📝 Wordle')
+        .setDescription(`Guess the 5-letter word!\nYou have ${maxGuesses} attempts.\n\n🟩 = Correct letter and position\n🟨 = Correct letter, wrong position\n⬜ = Letter not in word\n\nType your guess in chat!`)
+        .setFooter({ text: config.footer.text })
+        .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+
+    const filter = m => m.author.id === interaction.user.id && m.content.length === 5;
+    const collector = interaction.channel.createMessageCollector({ filter, time: 300000, max: maxGuesses });
+
+    collector.on('collect', async m => {
+        const guess = m.content.toUpperCase();
+        guesses.push(guess);
+
+        const display = guesses.map(g => `${g} ${getColoredGuess(g)}`).join('\n');
+        const isWon = guess === word;
+
+        const updateEmbed = new EmbedBuilder()
+            .setColor(isWon ? config.colors.success : guesses.length >= maxGuesses ? config.colors.error : config.colors.primary)
+            .setTitle(isWon ? '🎉 You Won!' : guesses.length >= maxGuesses ? `💀 Game Over! The word was: ${word}` : '📝 Wordle')
+            .setDescription(`${display}\n\n**Attempts:** ${guesses.length}/${maxGuesses}`)
+            .setFooter({ text: config.footer.text })
+            .setTimestamp();
+
+        await interaction.editReply({ embeds: [updateEmbed] });
+
+        if (isWon) {
+            collector.stop();
+        }
+    });
+}
+
+// Memory Match Game
+async function playMemory(interaction) {
+    const emojis = ['🍎', '🍌', '🍇', '🍊', '🍓', '🍉', '🍒', '🥝'];
+    const cards = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
+    const revealed = new Array(16).fill(false);
+    let firstCard = null;
+    let matches = 0;
+
+    const createBoard = () => {
+        const rows = [];
+        for (let i = 0; i < 4; i++) {
+            const row = new ActionRowBuilder();
+            for (let j = 0; j < 4; j++) {
+                const index = i * 4 + j;
+                row.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`memory_${index}`)
+                        .setLabel(revealed[index] ? cards[index] : '❓')
+                        .setStyle(revealed[index] ? ButtonStyle.Success : ButtonStyle.Primary)
+                        .setDisabled(revealed[index])
+                );
+            }
+            rows.push(row);
+        }
+        return rows;
+    };
+
+    const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle('🧩 Memory Match')
+        .setDescription(`Find all matching pairs!\n**Matches:** ${matches}/8`)
+        .setFooter({ text: config.footer.text })
+        .setTimestamp();
+
+    const message = await interaction.reply({
+        embeds: [embed],
+        components: createBoard(),
+        fetchReply: true
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 300000 });
+
+    collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+            await i.reply({ content: 'This is not your game!', ephemeral: true });
+            return;
+        }
+
+        const index = parseInt(i.customId.split('_')[1]);
+
+        if (firstCard === null) {
+            firstCard = index;
+            revealed[index] = true;
+        } else {
+            revealed[index] = true;
+
+            if (cards[firstCard] === cards[index]) {
+                matches++;
+                firstCard = null;
+            } else {
+                await i.update({ components: createBoard() });
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                revealed[firstCard] = false;
+                revealed[index] = false;
+                firstCard = null;
+            }
+        }
+
+        const updateEmbed = new EmbedBuilder()
+            .setColor(matches === 8 ? config.colors.success : config.colors.primary)
+            .setTitle(matches === 8 ? '🎉 You Won!' : '🧩 Memory Match')
+            .setDescription(`Find all matching pairs!\n**Matches:** ${matches}/8`)
+            .setFooter({ text: config.footer.text })
+            .setTimestamp();
+
+        await i.update({ embeds: [updateEmbed], components: createBoard() });
+
+        if (matches === 8) {
+            collector.stop();
+        }
+    });
+}
+
+// Number Guess Game
+async function playNumberGuess(interaction) {
+    const number = Math.floor(Math.random() * 100) + 1;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle('🎲 Number Guessing Game')
+        .setDescription(`I'm thinking of a number between 1 and 100!\nYou have ${maxAttempts} attempts to guess it.\n\nType your guess in chat!`)
+        .setFooter({ text: config.footer.text })
+        .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+
+    const filter = m => m.author.id === interaction.user.id && !isNaN(m.content);
+    const collector = interaction.channel.createMessageCollector({ filter, time: 300000, max: maxAttempts });
+
+    collector.on('collect', async m => {
+        const guess = parseInt(m.content);
+        attempts++;
+
+        let hint = '';
+        let isWon = false;
+
+        if (guess === number) {
+            hint = `🎉 **Correct!** You guessed it in ${attempts} attempt(s)!`;
+            isWon = true;
+        } else if (guess < number) {
+            hint = `📈 Too low! Try a higher number.`;
+        } else {
+            hint = `📉 Too high! Try a lower number.`;
+        }
+
+        const updateEmbed = new EmbedBuilder()
+            .setColor(isWon ? config.colors.success : attempts >= maxAttempts ? config.colors.error : config.colors.primary)
+            .setTitle(isWon ? '🎉 You Won!' : attempts >= maxAttempts ? `💀 Game Over! The number was: ${number}` : '🎲 Number Guessing Game')
+            .setDescription(`${hint}\n\n**Attempts:** ${attempts}/${maxAttempts}`)
+            .setFooter({ text: config.footer.text })
+            .setTimestamp();
+
+        await interaction.editReply({ embeds: [updateEmbed] });
+
+        if (isWon) {
+            collector.stop();
+        }
+    });
+}

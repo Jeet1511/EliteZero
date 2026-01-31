@@ -78,6 +78,9 @@ class PremiumEmbedBuilder {
                 url: options.author.url,
             });
         }
+        if (options.footer) {
+            embed.setFooter({ text: options.footer });
+        }
 
         return embed;
     }

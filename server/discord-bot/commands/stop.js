@@ -39,7 +39,7 @@ export default {
                 '🦞 Use `/zero` anytime to activate OpenClaw again',
                 '#00FF88'
             )
-                .setFooter({ text: 'EliteZero • Futuristic Bot' });
+                .setFooter({ text: config.footer.text });
 
             await interaction.editReply({ embeds: [embed] });
             logger.success(`Deactivated OpenClaw mode for ${username}`);

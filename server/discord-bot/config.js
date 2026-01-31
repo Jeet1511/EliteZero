@@ -1,4 +1,5 @@
 // Bot Configuration
+// Created by @jeet1511 - https://github.com/jeet1511
 export default {
   // Futuristic color scheme
   colors: {
@@ -50,12 +51,19 @@ export default {
   settings: {
     prefix: '!',  // Fallback prefix for non-slash commands
     ownerId: '',  // Your Discord user ID (optional)
-    supportServer: '', // Support server invite (optional)
+    github: 'https://github.com/jeet1511', // Creator GitHub
+    inviteURL: 'https://discord.com/oauth2/authorize?client_id=1466746596904665179', // Bot invite link
   },
 
   // Embed footer
   footer: {
-    text: 'EliteZero • Futuristic Bot',
+    text: 'EliteZero • God',
     iconURL: '', // Bot avatar URL (will be set dynamically)
+  },
+
+  // Keep-alive configuration (prevents bot sleep on Replit)
+  keepAlive: {
+    enabled: true, // Set to false to disable keep-alive messages
+    interval: 5 * 60 * 1000, // 5 minutes in milliseconds
   },
 };
