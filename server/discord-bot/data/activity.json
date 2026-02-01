@@ -2,12 +2,19 @@
   "users": {
     "966627611885326346": {
       "username": "_storm_pegasus",
-      "messages": 12,
+      "messages": 56,
       "voiceMinutes": 0,
-      "lastActive": "2026-01-31T15:34:25.906Z",
+      "lastActive": "2026-01-31T21:15:11.914Z",
       "joinedTracking": "2026-01-31T14:53:05.150Z"
+    },
+    "1072659886795661442": {
+      "username": "aravhaphere",
+      "messages": 61,
+      "voiceMinutes": 0,
+      "lastActive": "2026-01-31T21:15:14.517Z",
+      "joinedTracking": "2026-01-31T20:46:24.727Z"
     }
   },
   "startDate": "2026-01-31T14:52:46.203Z",
-  "lastUpdated": "2026-01-31T15:34:25.906Z"
+  "lastUpdated": "2026-01-31T21:15:14.517Z"
 }

@@ -1,0 +1,166 @@
+{
+  "966627611885326346": {
+    "totalGames": 4,
+    "wins": 2,
+    "losses": 0,
+    "draws": 0,
+    "totalPoints": 135,
+    "achievementPoints": 115,
+    "gameStats": {
+      "tictactoe": {
+        "played": 2,
+        "won": 2,
+        "lost": 0,
+        "draw": 0,
+        "points": 20
+      },
+      "hangman": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "points": 0
+      },
+      "wordle": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "avgAttempts": 0,
+        "points": 0
+      },
+      "memory": {
+        "played": 0,
+        "won": 0,
+        "bestMoves": null,
+        "points": 0
+      },
+      "guess": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "avgAttempts": 0,
+        "points": 0
+      },
+      "trivia": {
+        "played": 0,
+        "totalScore": 0,
+        "bestScore": 0,
+        "points": 0
+      },
+      "rps": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "draw": 0,
+        "points": 0
+      },
+      "connectfour": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "draw": 0,
+        "points": 0
+      },
+      "reaction": {
+        "played": 0,
+        "avgTime": 0,
+        "bestTime": null,
+        "points": 0
+      },
+      "quizbattle": {
+        "played": 0,
+        "totalScore": 0,
+        "bestScore": 0,
+        "points": 0
+      }
+    },
+    "achievements": [
+      "first_steps",
+      "memory_genius",
+      "quick_learner"
+    ],
+    "lastPlayed": 1769893191370,
+    "streak": 2,
+    "currentStreak": 2
+  },
+  "1072659886795661442": {
+    "totalGames": 1,
+    "wins": 0,
+    "losses": 1,
+    "draws": 0,
+    "totalPoints": 5,
+    "achievementPoints": 5,
+    "gameStats": {
+      "tictactoe": {
+        "played": 1,
+        "won": 0,
+        "lost": 1,
+        "draw": 0,
+        "points": 0
+      },
+      "hangman": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "points": 0
+      },
+      "wordle": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "avgAttempts": 0,
+        "points": 0
+      },
+      "memory": {
+        "played": 0,
+        "won": 0,
+        "bestMoves": null,
+        "points": 0
+      },
+      "guess": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "avgAttempts": 0,
+        "points": 0
+      },
+      "trivia": {
+        "played": 0,
+        "totalScore": 0,
+        "bestScore": 0,
+        "points": 0
+      },
+      "rps": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "draw": 0,
+        "points": 0
+      },
+      "connectfour": {
+        "played": 0,
+        "won": 0,
+        "lost": 0,
+        "draw": 0,
+        "points": 0
+      },
+      "reaction": {
+        "played": 0,
+        "avgTime": 0,
+        "bestTime": null,
+        "points": 0
+      },
+      "quizbattle": {
+        "played": 0,
+        "totalScore": 0,
+        "bestScore": 0,
+        "points": 0
+      }
+    },
+    "achievements": [
+      "first_steps"
+    ],
+    "lastPlayed": 1769893191371,
+    "streak": 0,
+    "currentStreak": 0
+  }
+}
