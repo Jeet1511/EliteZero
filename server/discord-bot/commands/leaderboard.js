@@ -20,7 +20,10 @@ export default {
 
     async execute(interaction) {
         try {
-            await interaction.deferReply();
+            // Only defer if not already acknowledged
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.deferReply();
+            }
 
             const type = interaction.options.getString('type') || 'messages';
             const guild = interaction.guild;

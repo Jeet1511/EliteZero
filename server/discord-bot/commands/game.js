@@ -31,10 +31,24 @@ export default {
     async execute(interaction) {
         const gameType = interaction.options.getString('type');
 
+        console.log('[DEBUG execute] gameType:', gameType);
+        console.log('[DEBUG execute] interaction.replied:', interaction.replied);
+        console.log('[DEBUG execute] interaction.deferred:', interaction.deferred);
+
         if (gameType) {
             // User selected game type directly via slash command option
             // Defer the reply immediately to acknowledge the interaction
-            await interaction.deferReply();
+            if (!interaction.replied && !interaction.deferred) {
+                try {
+                    await interaction.deferReply();
+                } catch (error) {
+                    console.log('[DEBUG execute] Failed to defer (race condition):', error.message);
+                    // If deferring fails, the interaction was already acknowledged elsewhere
+                    // This can happen in rare race conditions - just continue
+                }
+            } else {
+                console.log('[DEBUG execute] Interaction already acknowledged! replied:', interaction.replied, 'deferred:', interaction.deferred);
+            }
             await showModeSelection(interaction, gameType);
         } else {
             // Show game selection menu (this will call interaction.reply())
@@ -438,25 +452,12 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
             console.log(`[DEBUG showGameSummary] Button clicked: ${i.customId} by user: ${i.user.id}`);
             console.log(`[DEBUG showGameSummary] Mode: ${mode}, Opponent ID: ${opponent?.id}, Interaction User: ${interaction.user.id}`);
 
-            // Check permissions FIRST before deferring
-            if (mode === 'multiplayer') {
-                // In multiplayer, only the opponent can accept
-                if (i.customId === 'start_game' && i.user.id !== opponent.id) {
-                    console.log(`[DEBUG showGameSummary] Unauthorized user tried to start game`);
-                    await i.reply({ content: '❌ Only the challenged player can accept!', ephemeral: true });
-                    return;
-                }
-            } else {
-                // In solo/computer, only the host can start
-                if (i.user.id !== interaction.user.id) {
-                    console.log(`[DEBUG showGameSummary] Unauthorized user tried to interact`);
-                    await i.reply({ content: '❌ This is not your game!', ephemeral: true });
-                    return;
-                }
-            }
-
-            // Handle cancel button
+            // Handle cancel button first (anyone can see the cancel confirmation)
             if (i.customId === 'cancel_game') {
+                // Only the game creator can cancel
+                if (i.user.id !== interaction.user.id) {
+                    return await i.reply({ content: '❌ Only the game creator can cancel!', ephemeral: true });
+                }
                 console.log(`[DEBUG showGameSummary] Game cancelled`);
                 await i.update({
                     content: '❌ Game cancelled!',
@@ -466,13 +467,29 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
                 return;
             }
 
-            // Handle start game button (user is authorized at this point)
+            // Handle start game button
             if (i.customId === 'start_game') {
+                // Check permissions based on mode
+                if (mode === 'multiplayer') {
+                    // In multiplayer, only the opponent can accept
+                    if (i.user.id !== opponent.id) {
+                        console.log(`[DEBUG showGameSummary] Unauthorized user tried to start game`);
+                        return await i.reply({ content: '❌ Only the challenged player can accept!', ephemeral: true });
+                    }
+                } else {
+                    // In solo/computer, only the host can start
+                    if (i.user.id !== interaction.user.id) {
+                        console.log(`[DEBUG showGameSummary] Unauthorized user tried to interact`);
+                        return await i.reply({ content: '❌ This is not your game!', ephemeral: true });
+                    }
+                }
+
+                // User is authorized - defer the update and start the game
                 console.log(`[DEBUG showGameSummary] Starting game, deferring update...`);
                 await i.deferUpdate();
                 console.log(`[DEBUG showGameSummary] Defer successful, calling startGame...`);
-                // Start the actual game
-                await startGame(interaction, gameType, difficulty, mode, opponent);
+                // Use the button interaction (i) instead of original interaction
+                await startGame(i, gameType, difficulty, mode, opponent);
                 console.log(`[DEBUG showGameSummary] startGame completed`);
             }
         } catch (error) {
@@ -545,9 +562,17 @@ async function startGame(interaction, gameType, difficulty, mode, opponent) {
             await playTargetShooter(interaction, session);
             break;
         default:
+            // For unimplemented games, show coming soon message
+            const comingSoonEmbed = new EmbedBuilder()
+                .setColor(config.colors.warning)
+                .setTitle('🚧 Coming Soon!')
+                .setDescription(`**${gameType}** is currently under development.\n\nCheck back soon for this exciting new game!`)
+                .setFooter({ text: config.footer.text })
+                .setTimestamp();
+
             await interaction.editReply({
-                content: `${gameType} is coming soon!`,
-                embeds: [],
+                content: '',
+                embeds: [comingSoonEmbed],
                 components: []
             });
             gameManager.endSession(session.id);
@@ -575,6 +600,17 @@ function createGameEndButtons() {
                 .setStyle(ButtonStyle.Secondary)
         )
     ];
+}
+
+// Helper function to create Abort button for active games
+function createAbortButton() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('abort_game')
+            .setLabel('Abort Game')
+            .setEmoji('🚫')
+            .setStyle(ButtonStyle.Danger)
+    );
 }
 
 // Helper function to handle game end with points and achievements
@@ -653,6 +689,8 @@ async function playTicTacToe(interaction, session, opponent) {
             }
             rows.push(row);
         }
+        // Add Abort button as 4th row
+        rows.push(createAbortButton());
         return rows;
     };
 
@@ -686,6 +724,18 @@ async function playTicTacToe(interaction, session, opponent) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         // Check if it's the correct player's turn
         if (mode === 'multiplayer') {
             if (i.user.id !== session.data.currentTurn) {
@@ -904,6 +954,8 @@ async function playHangman(interaction, session) {
             }
             rows.push(row);
         }
+        // Add abort button as 4th row
+        rows.push(createAbortButton());
 
         return rows;
     };
@@ -999,6 +1051,18 @@ async function playHangman(interaction, session) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (i.user.id !== interaction.user.id) {
             await i.reply({ content: '❌ This is not your game!', ephemeral: true });
             return;
@@ -1265,6 +1329,8 @@ async function playMemoryMatch(interaction, session) {
             }
             rows.push(row);
         }
+        // Add abort button as 5th row
+        rows.push(createAbortButton());
         return rows;
     };
 
@@ -1345,6 +1411,18 @@ async function playMemoryMatch(interaction, session) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (i.user.id !== interaction.user.id) {
             await i.reply({ content: '❌ This is not your game!', ephemeral: true });
             return;
@@ -1617,7 +1695,7 @@ async function playTrivia(interaction, session) {
 
         await interaction.editReply({
             embeds: [embed],
-            components: [buttons]
+            components: [buttons, createAbortButton()]
         });
     };
 
@@ -1627,6 +1705,18 @@ async function playTrivia(interaction, session) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (i.user.id !== interaction.user.id) {
             await i.reply({ content: '❌ This is not your game!', ephemeral: true });
             return;
@@ -1775,7 +1865,7 @@ async function playRockPaperScissors(interaction, session, opponent) {
 
         await interaction.editReply({
             embeds: [embed],
-            components: [buttons]
+            components: [buttons, createAbortButton()]
         });
     };
 
@@ -1785,6 +1875,18 @@ async function playRockPaperScissors(interaction, session, opponent) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (i.user.id !== interaction.user.id) {
             await i.reply({ content: '❌ This is not your game!', ephemeral: true });
             return;
@@ -2079,7 +2181,7 @@ async function playConnectFour(interaction, session, opponent) {
             );
         }
 
-        return [row1, row2];
+        return [row1, row2, createAbortButton()];
     };
 
     const updateDisplay = async () => {
@@ -2107,6 +2209,18 @@ async function playConnectFour(interaction, session, opponent) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (mode === 'multiplayer') {
             if (i.user.id !== session.data.currentTurn) {
                 await i.reply({ content: '❌ It\'s not your turn!', ephemeral: true });
@@ -2139,15 +2253,6 @@ async function playConnectFour(interaction, session, opponent) {
                 resultDesc += `🎉 **${winnerUser.username} wins!**`;
             }
 
-            const resultEmbed = new EmbedBuilder()
-                .setColor(winner === 'draw' ? config.colors.warning : config.colors.success)
-                .setTitle('🔴 Connect Four - Game Over!')
-                .setDescription(resultDesc)
-                .setFooter({ text: config.footer.text })
-                .setTimestamp();
-
-            await i.update({ embeds: [resultEmbed], components: [] });
-
             const result = winner === 'draw' ? 'draw' : winner === '🔴' ? 'win' : 'loss';
             const { points, achievementText } = await handleGameEnd(interaction, session, result);
             if (mode === 'multiplayer' && player2) {
@@ -2155,8 +2260,16 @@ async function playConnectFour(interaction, session, opponent) {
                 gameStats.recordGame(player2.id, 'connectfour', p2Result);
             }
 
-            resultEmbed.setDescription(`${resultDesc}\n\n💰 **Points Earned:** +${points} pts${achievementText}`);
-            await i.update({ embeds: [resultEmbed], components: createGameEndButtons() });
+            resultDesc += `\n\n💰 **Points Earned:** +${points} pts${achievementText}`;
+
+            const resultEmbed = new EmbedBuilder()
+                .setColor(winner === 'draw' ? config.colors.warning : config.colors.success)
+                .setTitle('🔴 Connect Four - Game Over!')
+                .setDescription(resultDesc)
+                .setFooter({ text: config.footer.text })
+                .setTimestamp();
+
+            await interaction.editReply({ embeds: [resultEmbed], components: createGameEndButtons() });
 
             const endCollector = i.message.createMessageComponentCollector({ time: 60000 });
             endCollector.on('collect', async (btnInt) => {
@@ -2211,6 +2324,11 @@ async function playConnectFour(interaction, session, opponent) {
                 aiResultDesc += aiWinner === 'draw' ? '🤝 **It\'s a draw!**' :
                     aiWinner === '🔴' ? `🎉 **You won!**` : '🤖 **Computer wins!**';
 
+                const aiResult = aiWinner === 'draw' ? 'draw' : aiWinner === '🔴' ? 'win' : 'loss';
+                const { points: aiPoints, achievementText: aiAchievementText } = await handleGameEnd(interaction, session, aiResult);
+
+                aiResultDesc += `\n\n💰 **Points Earned:** +${aiPoints} pts${aiAchievementText}`;
+
                 const aiResultEmbed = new EmbedBuilder()
                     .setColor(aiWinner === 'draw' ? config.colors.warning : aiWinner === '🔴' ? config.colors.success : config.colors.error)
                     .setTitle('🔴 Connect Four - Game Over!')
@@ -2218,10 +2336,37 @@ async function playConnectFour(interaction, session, opponent) {
                     .setFooter({ text: config.footer.text })
                     .setTimestamp();
 
-                await interaction.editReply({ embeds: [aiResultEmbed], components: [] });
+                await interaction.editReply({ embeds: [aiResultEmbed], components: createGameEndButtons() });
 
-                const aiResult = aiWinner === 'draw' ? 'draw' : aiWinner === '🔴' ? 'win' : 'loss';
-                gameStats.recordGame(player1.id, 'connectfour', aiResult);
+                const endCollector = (await interaction.fetchReply()).createMessageComponentCollector({ time: 60000 });
+                endCollector.on('collect', async (btnInt) => {
+                    if (btnInt.user.id !== player1.id) return await btnInt.reply({ content: 'Only you can use these!', ephemeral: true });
+                    if (btnInt.customId === 'play_again') {
+                        await btnInt.deferUpdate();
+                        gameManager.endSession(session.id);
+                        collector.stop();
+                        endCollector.stop();
+                        const newSession = gameManager.createSession('connectfour', player1.id, { mode, difficulty });
+                        await playConnectFour(btnInt, newSession, opponent);
+                    } else if (btnInt.customId === 'view_stats') {
+                        const stats = gameStats.getUserStats(player1.id);
+                        const statsEmbed = new EmbedBuilder()
+                            .setColor(config.colors.primary)
+                            .setTitle('📊 Your Connect Four Stats')
+                            .addFields(
+                                { name: 'Games', value: `${stats.gameStats.connectfour?.played || 0}`, inline: true },
+                                { name: 'Wins', value: `${stats.gameStats.connectfour?.won || 0}`, inline: true },
+                                { name: 'Points', value: `${stats.gameStats.connectfour?.points || 0}`, inline: true }
+                            );
+                        await btnInt.reply({ embeds: [statsEmbed], ephemeral: true });
+                    } else if (btnInt.customId === 'leave_game') {
+                        await btnInt.update({ content: '👋 Thanks for playing!', embeds: [], components: [] });
+                        gameManager.endSession(session.id);
+                        collector.stop();
+                        endCollector.stop();
+                    }
+                });
+
                 gameManager.endSession(session.id, aiWinner);
                 collector.stop();
             } else {
@@ -2291,7 +2436,7 @@ async function playReactionTime(interaction, session) {
             .setFooter({ text: config.footer.text })
             .setTimestamp();
 
-        await interaction.editReply({ embeds: [goEmbed], components: [button] });
+        await interaction.editReply({ embeds: [goEmbed], components: [button, createAbortButton()] });
     };
 
     await playRound();
@@ -2300,6 +2445,18 @@ async function playReactionTime(interaction, session) {
     const collector = message.createMessageComponentCollector({ time: 60000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (i.user.id !== interaction.user.id) {
             await i.reply({ content: '❌ This is not your game!', ephemeral: true });
             return;
@@ -2448,7 +2605,7 @@ async function playQuizBattle(interaction, session, opponent) {
 
         await interaction.editReply({
             embeds: [embed],
-            components: [buttons]
+            components: [buttons, createAbortButton()]
         });
     };
 
@@ -2458,6 +2615,18 @@ async function playQuizBattle(interaction, session, opponent) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (mode === 'multiplayer') {
             if (i.user.id !== player1.id && i.user.id !== player2.id) {
                 await i.reply({ content: '❌ This is not your game!', ephemeral: true });
@@ -2639,6 +2808,15 @@ async function playTargetShooter(interaction, session) {
             rows.push(row);
         }
 
+        // Add abort button to the last (5th) row instead of creating a 6th row
+        // Discord only allows 5 action rows maximum
+        const abortButton = new ButtonBuilder()
+            .setCustomId('abort_game')
+            .setLabel('Abort')
+            .setEmoji('🚫')
+            .setStyle(ButtonStyle.Danger);
+        rows[rows.length - 1].addComponents(abortButton);
+
         await interaction.editReply({ embeds: [embed], components: rows });
         session.data.targetPos = targetPos;
         session.data.roundComplete = false;
@@ -2760,6 +2938,19 @@ async function playTargetShooter(interaction, session) {
     const collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
+        // Handle abort button
+        if (i.customId === 'abort_game') {
+            if (session.data.targetTimeout) clearTimeout(session.data.targetTimeout);
+            await i.update({
+                content: '🚫 Game aborted!',
+                embeds: [],
+                components: []
+            });
+            gameManager.endSession(session.id);
+            collector.stop();
+            return;
+        }
+
         if (i.user.id !== interaction.user.id) {
             return await i.reply({ content: '❌ This is not your game!', ephemeral: true });
         }
