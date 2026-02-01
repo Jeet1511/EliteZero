@@ -20,15 +20,20 @@ export default {
                 logger.error(`Error executing ${interaction.commandName}: ${error.message}`);
                 console.error('Full error details:', error);
 
-                const errorEmbed = embedBuilder.error(
-                    'Command Error',
-                    'There was an error executing this command. Please try again later.'
-                );
+                try {
+                    const errorEmbed = embedBuilder.error(
+                        'Command Error',
+                        'There was an error executing this command. Please try again later.'
+                    );
 
-                if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-                } else {
-                    await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+                    if (interaction.replied || interaction.deferred) {
+                        await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+                    } else {
+                        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+                    }
+                } catch (replyError) {
+                    // Failed to send error message - interaction might be in an invalid state
+                    logger.error(`Failed to send error message: ${replyError.message}`);
                 }
             }
         }
