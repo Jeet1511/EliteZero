@@ -1,18 +1,18 @@
 {
   "966627611885326346": {
-    "totalGames": 6,
-    "wins": 3,
+    "totalGames": 7,
+    "wins": 4,
     "losses": 0,
     "draws": 1,
-    "totalPoints": 150,
+    "totalPoints": 160,
     "achievementPoints": 115,
     "gameStats": {
       "tictactoe": {
-        "played": 4,
-        "won": 3,
+        "played": 5,
+        "won": 4,
         "lost": 0,
         "draw": 1,
-        "points": 35
+        "points": 45
       },
       "hangman": {
         "played": 0,
@@ -78,9 +78,9 @@
       "memory_genius",
       "quick_learner"
     ],
-    "lastPlayed": 1769925154498,
-    "streak": 3,
-    "currentStreak": 3
+    "lastPlayed": 1769977975067,
+    "streak": 4,
+    "currentStreak": 4
   },
   "1072659886795661442": {
     "totalGames": 1,
