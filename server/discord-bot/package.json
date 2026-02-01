@@ -1,0 +1,30 @@
+{
+  "name": "elitezero-discord-bot",
+  "version": "1.0.0",
+  "description": "A futuristic Discord chatbot with AI capabilities and premium aesthetics",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "chatbot",
+    "ai",
+    "futuristic"
+  ],
+  "author": "Jeet",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.1",
+    "chalk": "^5.3.0",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

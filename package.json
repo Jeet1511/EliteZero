@@ -1,0 +1,20 @@
+{
+    "name": "elitezero",
+    "version": "1.0.0",
+    "description": "EliteZero Discord Bot - Created by @jeet1511",
+    "main": "start.js",
+    "type": "module",
+    "scripts": {
+        "start": "cd server/discord-bot && node index.js",
+        "install-bot": "cd server/discord-bot && npm install"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "author": "@jeet1511",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/jeet1511/EliteZero"
+    },
+    "private": true
+}
