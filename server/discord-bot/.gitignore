@@ -1,6 +1,40 @@
-node_modules/
+# ================================
+# CONFIDENTIAL / SENSITIVE FILES
+# ================================
+
+# Environment variables (CRITICAL - Discord tokens, API keys)
 .env
-.env.example
-*.log
-.DS_Store
+.env.*
+!.env.example
+
+# ================================
+# DEPENDENCIES
+# ================================
+node_modules/
 package-lock.json
+
+# ================================
+# LOGS & TEMP
+# ================================
+*.log
+logs/
+.cache/
+
+# ================================
+# OS FILES
+# ================================
+.DS_Store
+Thumbs.db
+
+# ================================
+# BACKUP FILES
+# ================================
+*.backup
+*.bak
+*.old
+
+# ================================
+# DATABASE / STATE
+# ================================
+data/*.json
+!data/.gitkeep
