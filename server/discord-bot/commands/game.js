@@ -175,7 +175,8 @@ async function showModeSelection(interaction, gameType) {
         rps: 'Rock Paper Scissors',
         connectfour: 'Connect Four',
         reaction: 'Reaction Time',
-        quizbattle: 'Quiz Battle'
+        quizbattle: 'Quiz Battle',
+        shooter: 'Target Shooter'
     };
 
     const embed = new EmbedBuilder()
@@ -263,7 +264,11 @@ async function showDifficultySelection(interaction, gameType, mode) {
         memory: 'Memory Match',
         guess: 'Number Guess',
         trivia: 'Trivia',
-        rps: 'Rock Paper Scissors'
+        rps: 'Rock Paper Scissors',
+        connectfour: 'Connect Four',
+        reaction: 'Reaction Time',
+        quizbattle: 'Quiz Battle',
+        shooter: 'Target Shooter'
     };
 
     const embed = new EmbedBuilder()
@@ -341,7 +346,11 @@ async function showOpponentSelection(interaction, gameType, mode, difficulty) {
         memory: 'Memory Match',
         guess: 'Number Guess',
         trivia: 'Trivia',
-        rps: 'Rock Paper Scissors'
+        rps: 'Rock Paper Scissors',
+        connectfour: 'Connect Four',
+        reaction: 'Reaction Time',
+        quizbattle: 'Quiz Battle',
+        shooter: 'Target Shooter'
     };
 
     const embed = new EmbedBuilder()
@@ -395,7 +404,11 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
         memory: 'Memory Match',
         guess: 'Number Guess',
         trivia: 'Trivia',
-        rps: 'Rock Paper Scissors'
+        rps: 'Rock Paper Scissors',
+        connectfour: 'Connect Four',
+        reaction: 'Reaction Time',
+        quizbattle: 'Quiz Battle',
+        shooter: 'Target Shooter'
     };
 
     const gameEmojis = {
@@ -405,7 +418,11 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
         memory: '🧩',
         guess: '🎲',
         trivia: '🧠',
-        rps: '✊'
+        rps: '✊',
+        connectfour: '🔴',
+        reaction: '⚡',
+        quizbattle: '🏆',
+        shooter: '🎯'
     };
 
     const modeNames = {
