@@ -35,23 +35,23 @@ export default {
         console.log('[DEBUG execute] interaction.replied:', interaction.replied);
         console.log('[DEBUG execute] interaction.deferred:', interaction.deferred);
 
+        // Always defer first to acknowledge the interaction immediately
+        if (!interaction.replied && !interaction.deferred) {
+            try {
+                await interaction.deferReply();
+                console.log('[DEBUG execute] Successfully deferred reply');
+            } catch (error) {
+                console.log('[DEBUG execute] Failed to defer:', error.message);
+                // If we can't defer at all, we can't continue
+                return;
+            }
+        }
+
         if (gameType) {
             // User selected game type directly via slash command option
-            // Defer the reply immediately to acknowledge the interaction
-            if (!interaction.replied && !interaction.deferred) {
-                try {
-                    await interaction.deferReply();
-                } catch (error) {
-                    console.log('[DEBUG execute] Failed to defer (race condition):', error.message);
-                    // If deferring fails, the interaction was already acknowledged elsewhere
-                    // This can happen in rare race conditions - just continue
-                }
-            } else {
-                console.log('[DEBUG execute] Interaction already acknowledged! replied:', interaction.replied, 'deferred:', interaction.deferred);
-            }
             await showModeSelection(interaction, gameType);
         } else {
-            // Show game selection menu (this will call interaction.reply())
+            // Show game selection menu
             await showGameSelection(interaction);
         }
     },
@@ -129,12 +129,13 @@ async function showGameSelection(interaction) {
 
     const row = new ActionRowBuilder().addComponents(gameMenu);
 
-    const message = await interaction.reply({
+    // Use editReply since we already deferred in execute()
+    await interaction.editReply({
         embeds: [embed],
-        components: [row],
-        fetchReply: true
+        components: [row]
     });
 
+    const message = await interaction.fetchReply();
     const collector = message.createMessageComponentCollector({ time: 120000 });
 
     collector.on('collect', async i => {
@@ -445,7 +446,8 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
     });
 
     const message = await interaction.fetchReply();
-    const collector = message.createMessageComponentCollector({ time: 60000, max: 1 });
+    // Don't use max: 1 because unauthorized clicks would consume it
+    const collector = message.createMessageComponentCollector({ time: 60000 });
 
     collector.on('collect', async i => {
         try {
@@ -464,6 +466,7 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
                     embeds: [],
                     components: []
                 });
+                collector.stop('cancelled');
                 return;
             }
 
@@ -487,6 +490,7 @@ async function showGameSummary(interaction, gameType, difficulty, mode, opponent
                 // User is authorized - defer the update and start the game
                 console.log(`[DEBUG showGameSummary] Starting game, deferring update...`);
                 await i.deferUpdate();
+                collector.stop('started');
                 console.log(`[DEBUG showGameSummary] Defer successful, calling startGame...`);
                 // Use the button interaction (i) instead of original interaction
                 await startGame(i, gameType, difficulty, mode, opponent);
@@ -2758,19 +2762,32 @@ async function playQuizBattle(interaction, session, opponent) {
 
 // 🎯 Target Shooter Game Implementation
 async function playTargetShooter(interaction, session) {
-    const difficulty = session.difficulty;
-    const gridSize = 5;
+    const difficulty = session.difficulty || 'hard';
+    const gridSize = 4; // 4x4 grid = 4 rows, leaving room for abort button row (5 max)
     const totalRounds = 10;
     let currentRound = 0;
     let score = 0;
     let combo = 0;
     let hits = 0;
     let misses = 0;
+    let collector = null;
+    let targetTimeout = null;
+    let gameEnded = false;
 
     const targetDuration = difficulty === 'easy' ? 4000 : difficulty === 'hard' ? 2000 : 1500;
     session.data = { currentRound, score, combo, hits, misses, gameOver: false };
 
+    // Cleanup function
+    const cleanup = () => {
+        if (targetTimeout) {
+            clearTimeout(targetTimeout);
+            targetTimeout = null;
+        }
+    };
+
     const playRound = async () => {
+        if (gameEnded) return;
+
         const targetRow = Math.floor(Math.random() * gridSize);
         const targetCol = Math.floor(Math.random() * gridSize);
         const targetPos = targetRow * gridSize + targetCol;
@@ -2808,39 +2825,42 @@ async function playTargetShooter(interaction, session) {
             rows.push(row);
         }
 
-        // Add abort button to the last (5th) row instead of creating a 6th row
-        // Discord only allows 5 action rows maximum
-        const abortButton = new ButtonBuilder()
-            .setCustomId('abort_game')
-            .setLabel('Abort')
-            .setEmoji('🚫')
-            .setStyle(ButtonStyle.Danger);
-        rows[rows.length - 1].addComponents(abortButton);
+        // Add abort button as a separate 5th row
+        rows.push(createAbortButton());
 
-        await interaction.editReply({ embeds: [embed], components: rows });
+        try {
+            await interaction.editReply({ embeds: [embed], components: rows });
+        } catch (error) {
+            console.error('[Target Shooter] Failed to update round:', error.message);
+            return;
+        }
+
         session.data.targetPos = targetPos;
         session.data.roundComplete = false;
 
-        session.data.targetTimeout = setTimeout(async () => {
-            if (!session.data.roundComplete) {
-                misses++;
-                combo = 0;
-                session.data.misses = misses;
-                session.data.combo = combo;
-                session.data.roundComplete = true;
+        // Set timeout for missed target
+        targetTimeout = setTimeout(async () => {
+            if (session.data.roundComplete || gameEnded) return;
 
-                const missEmbed = new EmbedBuilder()
-                    .setColor(config.colors.error)
-                    .setTitle('🎯 Target Shooter')
-                    .setDescription(
-                        `**Round ${currentRound + 1}/${totalRounds}**\n\n` +
-                        `${gridDisplay}\n\n` +
-                        `❌ **Too slow! Target escaped!**\n` +
-                        `**Score:** ${score}\n` +
-                        `**Hits:** ${hits} | **Misses:** ${misses}`
-                    )
-                    .setFooter({ text: config.footer.text });
+            misses++;
+            combo = 0;
+            session.data.misses = misses;
+            session.data.combo = combo;
+            session.data.roundComplete = true;
 
+            const missEmbed = new EmbedBuilder()
+                .setColor(config.colors.error)
+                .setTitle('🎯 Target Shooter')
+                .setDescription(
+                    `**Round ${currentRound + 1}/${totalRounds}**\n\n` +
+                    `${gridDisplay}\n\n` +
+                    `❌ **Too slow! Target escaped!**\n` +
+                    `**Score:** ${score}\n` +
+                    `**Hits:** ${hits} | **Misses:** ${misses}`
+                )
+                .setFooter({ text: config.footer.text });
+
+            try {
                 await interaction.editReply({ embeds: [missEmbed], components: [] });
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -2849,16 +2869,24 @@ async function playTargetShooter(interaction, session) {
 
                 if (currentRound >= totalRounds) {
                     await endGame();
-                } else {
+                } else if (!gameEnded) {
                     await playRound();
                 }
+            } catch (error) {
+                console.error('[Target Shooter] Timeout handling error:', error.message);
             }
         }, targetDuration);
     };
 
     const endGame = async () => {
+        if (gameEnded) return;
+        gameEnded = true;
         session.data.gameOver = true;
-        clearTimeout(session.data.targetTimeout);
+        cleanup();
+
+        if (collector) {
+            collector.stop('game_ended');
+        }
 
         const accuracy = totalRounds > 0 ? Math.round((hits / totalRounds) * 100) : 0;
         let rating = '';
@@ -2866,6 +2894,8 @@ async function playTargetShooter(interaction, session) {
         else if (accuracy >= 70) rating = '🎯 **Excellent!**';
         else if (accuracy >= 50) rating = '👍 **Good!**';
         else rating = '📚 **Keep practicing!**';
+
+        const { points, achievementText } = await handleGameEnd(interaction, session, 'complete', { score, hits });
 
         const resultEmbed = new EmbedBuilder()
             .setColor(config.colors.success)
@@ -2876,164 +2906,186 @@ async function playTargetShooter(interaction, session) {
                 `✅ **Hits:** ${hits}/${totalRounds}\n` +
                 `❌ **Misses:** ${misses}\n` +
                 `📊 **Accuracy:** ${accuracy}%\n\n` +
-                rating
+                rating +
+                `\n\n💰 **Points Earned:** +${points} pts${achievementText}`
             )
             .setFooter({ text: config.footer.text })
             .setTimestamp();
 
-        await interaction.editReply({ embeds: [resultEmbed], components: [] });
+        try {
+            await interaction.editReply({ embeds: [resultEmbed], components: createGameEndButtons() });
+        } catch (error) {
+            console.error('[Target Shooter] Failed to show results:', error.message);
+            return;
+        }
 
-        const { points, achievementText } = await handleGameEnd(interaction, session, 'complete', { score, hits });
-
-        resultEmbed.setDescription(
-            `**Final Results:**\n\n` +
-            `🎯 **Score:** ${GameAnimations.formatScore(score, 50)}\n` +
-            `✅ **Hits:** ${hits}/${totalRounds}\n` +
-            `❌ **Misses:** ${misses}\n` +
-            `📊 **Accuracy:** ${accuracy}%\n\n` +
-            rating +
-            `\n\n💰 **Points Earned:** +${points} pts${achievementText}`
-        );
-
-        await interaction.editReply({ embeds: [resultEmbed], components: createGameEndButtons() });
-
+        // Create new collector for end game buttons
         const message = await interaction.fetchReply();
         const endCollector = message.createMessageComponentCollector({ time: 60000 });
 
         endCollector.on('collect', async (btnInt) => {
-            if (btnInt.user.id !== interaction.user.id) {
-                return await btnInt.reply({ content: 'Only you can use these!', ephemeral: true });
-            }
+            try {
+                if (btnInt.user.id !== interaction.user.id) {
+                    return await btnInt.reply({ content: 'Only you can use these!', ephemeral: true });
+                }
 
-            if (btnInt.customId === 'play_again') {
-                await btnInt.deferUpdate();
-                gameManager.endSession(session.id);
-                endCollector.stop();
-                const newSession = gameManager.createSession('shooter', interaction.user.id, { difficulty });
-                await playTargetShooter(btnInt, newSession);
-            } else if (btnInt.customId === 'view_stats') {
-                const stats = gameStats.getUserStats(interaction.user.id);
-                const statsEmbed = new EmbedBuilder()
-                    .setColor(config.colors.primary)
-                    .setTitle('📊 Your Target Shooter Stats')
-                    .addFields(
-                        { name: 'Games', value: `${stats.gameStats.shooter?.played || 0}`, inline: true },
-                        { name: 'Best Score', value: `${stats.gameStats.shooter?.bestScore || 0}`, inline: true },
-                        { name: 'Points', value: `${stats.gameStats.shooter?.points || 0}`, inline: true }
-                    );
-                await btnInt.reply({ embeds: [statsEmbed], ephemeral: true });
-            } else if (btnInt.customId === 'leave_game') {
-                await btnInt.update({ content: '👋 Thanks for playing!', embeds: [], components: [] });
-                gameManager.endSession(session.id);
-                endCollector.stop();
+                if (btnInt.customId === 'play_again') {
+                    endCollector.stop('play_again');
+                    await btnInt.deferUpdate();
+                    gameManager.endSession(session.id);
+                    const newSession = gameManager.createSession('shooter', interaction.user.id, { difficulty });
+                    await playTargetShooter(btnInt, newSession);
+                } else if (btnInt.customId === 'view_stats') {
+                    const stats = gameStats.getUserStats(interaction.user.id);
+                    const statsEmbed = new EmbedBuilder()
+                        .setColor(config.colors.primary)
+                        .setTitle('📊 Your Target Shooter Stats')
+                        .addFields(
+                            { name: 'Games', value: `${stats.gameStats.shooter?.played || 0}`, inline: true },
+                            { name: 'Best Score', value: `${stats.gameStats.shooter?.bestScore || 0}`, inline: true },
+                            { name: 'Points', value: `${stats.gameStats.shooter?.points || 0}`, inline: true }
+                        );
+                    await btnInt.reply({ embeds: [statsEmbed], ephemeral: true });
+                } else if (btnInt.customId === 'leave_game') {
+                    endCollector.stop('leave');
+                    await btnInt.update({ content: '👋 Thanks for playing!', embeds: [], components: [] });
+                    gameManager.endSession(session.id);
+                }
+            } catch (error) {
+                // Silently ignore interaction errors (expired, already acknowledged, etc.)
             }
         });
 
-        gameManager.endSession(session.id, score);
+        endCollector.on('end', (collected, reason) => {
+            if (reason === 'time') {
+                interaction.editReply({ components: [] }).catch(() => { });
+            }
+            gameManager.endSession(session.id);
+        });
     };
 
+    // Start the game
     await playRound();
 
+    // Setup main game collector
     const message = await interaction.fetchReply();
-    const collector = message.createMessageComponentCollector({ time: 300000 });
+    collector = message.createMessageComponentCollector({ time: 300000 });
 
     collector.on('collect', async i => {
-        // Handle abort button
-        if (i.customId === 'abort_game') {
-            if (session.data.targetTimeout) clearTimeout(session.data.targetTimeout);
-            await i.update({
-                content: '🚫 Game aborted!',
-                embeds: [],
-                components: []
-            });
-            gameManager.endSession(session.id);
-            collector.stop();
-            return;
-        }
+        try {
+            if (gameEnded) {
+                // Game ended, ignore game button clicks
+                if (i.customId.startsWith('shoot_')) {
+                    return await i.deferUpdate().catch(() => { });
+                }
+                return;
+            }
 
-        if (i.user.id !== interaction.user.id) {
-            return await i.reply({ content: '❌ This is not your game!', ephemeral: true });
-        }
+            // Handle abort button
+            if (i.customId === 'abort_game') {
+                gameEnded = true;
+                cleanup();
+                collector.stop('aborted');
+                try {
+                    await i.update({
+                        content: '🚫 Game aborted!',
+                        embeds: [],
+                        components: []
+                    });
+                } catch (error) {
+                    // Ignore
+                }
+                gameManager.endSession(session.id);
+                return;
+            }
 
-        if (session.data.roundComplete) {
-            return await i.deferUpdate();
-        }
+            if (i.user.id !== interaction.user.id) {
+                return await i.reply({ content: '❌ This is not your game!', ephemeral: true });
+            }
 
-        const clickedPos = parseInt(i.customId.split('_')[1]);
-        const isHit = clickedPos === session.data.targetPos;
+            if (session.data.roundComplete || !i.customId.startsWith('shoot_')) {
+                return await i.deferUpdate().catch(() => { });
+            }
 
-        clearTimeout(session.data.targetTimeout);
-        session.data.roundComplete = true;
+            const clickedPos = parseInt(i.customId.split('_')[1]);
+            const isHit = clickedPos === session.data.targetPos;
 
-        if (isHit) {
-            hits++;
-            combo++;
-            const comboBonus = combo >= 5 ? 15 : combo >= 3 ? 10 : combo >= 2 ? 5 : 0;
-            const roundPoints = 10 + comboBonus;
-            score += roundPoints;
+            cleanup(); // Clear the timeout
+            session.data.roundComplete = true;
 
-            session.data.hits = hits;
-            session.data.combo = combo;
-            session.data.score = score;
+            if (isHit) {
+                hits++;
+                combo++;
+                const comboBonus = combo >= 5 ? 15 : combo >= 3 ? 10 : combo >= 2 ? 5 : 0;
+                const roundPoints = 10 + comboBonus;
+                score += roundPoints;
 
-            const grid = GameAnimations.createGrid(gridSize, gridSize, '⬜');
-            GameAnimations.updateGridCell(grid, Math.floor(clickedPos / gridSize), clickedPos % gridSize, '💥');
-            const hitDisplay = GameAnimations.gridToString(grid);
-            const comboDisplay = GameAnimations.getComboDisplay(combo);
+                session.data.hits = hits;
+                session.data.combo = combo;
+                session.data.score = score;
 
-            const hitEmbed = new EmbedBuilder()
-                .setColor(config.colors.success)
-                .setTitle('🎯 Target Shooter')
-                .setDescription(
-                    `**Round ${currentRound + 1}/${totalRounds}** ${comboDisplay}\n\n` +
-                    `${hitDisplay}\n\n` +
-                    `💥 **HIT! +${roundPoints} pts** ${comboBonus > 0 ? `(+${comboBonus} combo bonus)` : ''}\n` +
-                    `**Score:** ${GameAnimations.formatScore(score)}\n` +
-                    `**Hits:** ${hits} | **Misses:** ${misses}`
-                )
-                .setFooter({ text: config.footer.text });
+                const grid = GameAnimations.createGrid(gridSize, gridSize, '⬜');
+                GameAnimations.updateGridCell(grid, Math.floor(clickedPos / gridSize), clickedPos % gridSize, '💥');
+                const hitDisplay = GameAnimations.gridToString(grid);
+                const comboDisplay = GameAnimations.getComboDisplay(combo);
 
-            await i.update({ embeds: [hitEmbed], components: [] });
-        } else {
-            misses++;
-            combo = 0;
-            session.data.misses = misses;
-            session.data.combo = combo;
+                const hitEmbed = new EmbedBuilder()
+                    .setColor(config.colors.success)
+                    .setTitle('🎯 Target Shooter')
+                    .setDescription(
+                        `**Round ${currentRound + 1}/${totalRounds}** ${comboDisplay}\n\n` +
+                        `${hitDisplay}\n\n` +
+                        `💥 **HIT! +${roundPoints} pts** ${comboBonus > 0 ? `(+${comboBonus} combo bonus)` : ''}\n` +
+                        `**Score:** ${GameAnimations.formatScore(score)}\n` +
+                        `**Hits:** ${hits} | **Misses:** ${misses}`
+                    )
+                    .setFooter({ text: config.footer.text });
 
-            const grid = GameAnimations.createGrid(gridSize, gridSize, '⬜');
-            GameAnimations.updateGridCell(grid, Math.floor(clickedPos / gridSize), clickedPos % gridSize, '❌');
-            const missDisplay = GameAnimations.gridToString(grid);
+                await i.update({ embeds: [hitEmbed], components: [] });
+            } else {
+                misses++;
+                combo = 0;
+                session.data.misses = misses;
+                session.data.combo = combo;
 
-            const missEmbed = new EmbedBuilder()
-                .setColor(config.colors.error)
-                .setTitle('🎯 Target Shooter')
-                .setDescription(
-                    `**Round ${currentRound + 1}/${totalRounds}**\n\n` +
-                    `${missDisplay}\n\n` +
-                    `❌ **MISS!**\n` +
-                    `**Score:** ${score}\n` +
-                    `**Hits:** ${hits} | **Misses:** ${misses}`
-                )
-                .setFooter({ text: config.footer.text });
+                const grid = GameAnimations.createGrid(gridSize, gridSize, '⬜');
+                GameAnimations.updateGridCell(grid, Math.floor(clickedPos / gridSize), clickedPos % gridSize, '❌');
+                const missDisplay = GameAnimations.gridToString(grid);
 
-            await i.update({ embeds: [missEmbed], components: [] });
-        }
+                const missEmbed = new EmbedBuilder()
+                    .setColor(config.colors.error)
+                    .setTitle('🎯 Target Shooter')
+                    .setDescription(
+                        `**Round ${currentRound + 1}/${totalRounds}**\n\n` +
+                        `${missDisplay}\n\n` +
+                        `❌ **MISS!**\n` +
+                        `**Score:** ${score}\n` +
+                        `**Hits:** ${hits} | **Misses:** ${misses}`
+                    )
+                    .setFooter({ text: config.footer.text });
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+                await i.update({ embeds: [missEmbed], components: [] });
+            }
 
-        currentRound++;
-        session.data.currentRound = currentRound;
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
-        if (currentRound >= totalRounds) {
-            await endGame();
-        } else {
-            await playRound();
+            currentRound++;
+            session.data.currentRound = currentRound;
+
+            if (currentRound >= totalRounds) {
+                await endGame();
+            } else if (!gameEnded) {
+                await playRound();
+            }
+        } catch (error) {
+            // Silently handle errors to prevent unhandled rejections
+            console.error('[Target Shooter] Collector error:', error.message);
         }
     });
 
     collector.on('end', (collected, reason) => {
-        if (reason === 'time' && !session.data.gameOver) {
-            clearTimeout(session.data.targetTimeout);
+        cleanup();
+        if (reason === 'time' && !gameEnded) {
             gameManager.endSession(session.id);
             interaction.editReply({
                 content: '⏱️ Game timed out!',

@@ -1,11 +1,11 @@
 {
   "966627611885326346": {
-    "totalGames": 7,
+    "totalGames": 13,
     "wins": 4,
     "losses": 0,
     "draws": 1,
-    "totalPoints": 160,
-    "achievementPoints": 115,
+    "totalPoints": 295,
+    "achievementPoints": 140,
     "gameStats": {
       "tictactoe": {
         "played": 5,
@@ -71,14 +71,21 @@
         "totalScore": 0,
         "bestScore": 0,
         "points": 0
+      },
+      "shooter": {
+        "played": 1,
+        "hits": 3,
+        "bestScore": 30,
+        "points": 30
       }
     },
     "achievements": [
       "first_steps",
       "memory_genius",
-      "quick_learner"
+      "quick_learner",
+      "veteran"
     ],
-    "lastPlayed": 1769977975067,
+    "lastPlayed": 1770038896479,
     "streak": 4,
     "currentStreak": 4
   },

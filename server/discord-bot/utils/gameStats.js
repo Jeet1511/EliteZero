@@ -80,7 +80,14 @@ class GameStats {
                 currentStreak: 0
             });
         }
-        return this.stats.get(userId);
+
+        // Migrate existing users: add shooter stats if missing
+        const stats = this.stats.get(userId);
+        if (stats && stats.gameStats && !stats.gameStats.shooter) {
+            stats.gameStats.shooter = { played: 0, hits: 0, bestScore: 0, points: 0 };
+        }
+
+        return stats;
     }
 
     // Calculate points for a game result
@@ -281,14 +288,13 @@ class GameStats {
                     break;
 
                 case 'shooter':
-                    gameStats.played++;
+                    // Note: played++ and points+= are already handled above for all games
                     if (extraData.hits !== undefined) {
                         gameStats.hits += extraData.hits;
                     }
                     if (extraData.score !== undefined && extraData.score > gameStats.bestScore) {
                         gameStats.bestScore = extraData.score;
                     }
-                    gameStats.points += points;
                     break;
             }
         }
